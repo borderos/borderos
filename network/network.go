@@ -5,13 +5,17 @@ import (
 	"net"
 
 	"github.com/borderos/borderos/config"
+	"github.com/borderos/borderos/sysctl"
 
 	"github.com/vishvananda/netlink"
 )
 
-// TODO: Configure sysctls for forwarding
-
 func Configure(ifaces map[string]config.Interface, routing config.Routing) error {
+	for _, ctl := range []string{"net.ipv4.ip_forward", "net.ipv6.conf.all.forwarding"} {
+		if err := sysctl.Write(ctl, "1"); err != nil {
+			log.Printf("couldn't configure sysctl %s: %v\n", ctl, err)
+		}
+	}
 	SetupInterfaces(ifaces)
 	return SetDefaultRoute(routing.Default)
 }
