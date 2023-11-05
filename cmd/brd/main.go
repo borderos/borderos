@@ -60,8 +60,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := network.Configure(c.Interfaces, c.Routing); err != nil {
-		log.Fatalf("couldn't configure network: %v", err)
+	{
+		if err := network.Configure(c.Interfaces, c.Routing); err != nil {
+			log.Fatalf("couldn't configure network: %v", err)
+		}
+		if err := network.SetupResolver(c.System.Resolvers); err != nil {
+			log.Printf("couldn't configure DNS resolvers: %v\n", err)
+		}
 	}
 	fmt.Println("✅ Networking")
 

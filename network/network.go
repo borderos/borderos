@@ -1,8 +1,11 @@
 package network
 
 import (
+	"bytes"
+	"fmt"
 	"log"
 	"net"
+	"os"
 
 	"github.com/borderos/borderos/config"
 	"github.com/borderos/borderos/sysctl"
@@ -53,4 +56,19 @@ func SetDefaultRoute(addr string) error {
 		Gw: net.ParseIP(addr),
 	}
 	return netlink.RouteAdd(route)
+}
+
+func SetupResolver(ips []string) error {
+	var b bytes.Buffer
+	for _, ip := range ips {
+		fmt.Fprintf(&b, "nameserver %s\n", ip)
+	}
+	// Opinionated defaults
+	b.WriteString("options timeout:2 attempts:3 rotate\n")
+	f, err := os.Create("/etc/resolv.conf")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b.Bytes())
+	return err
 }
