@@ -13,9 +13,24 @@ import (
 
 	"github.com/gokrazy/gokrazy"
 	"github.com/pterm/pterm"
+	"golang.org/x/sys/unix"
 )
 
 var buildTime = "INFINITY"
+
+func mountfs() error {
+	if err := os.Mkdir("/perm/etc", 0750); !os.IsExist(err) {
+		return err
+	}
+	if err := os.Mkdir("/perm/.w", 0750); !os.IsExist(err) {
+		return err
+	}
+	var flags uintptr = unix.MOUNT_ATTR_NOATIME | unix.MOUNT_ATTR_NODEV | unix.MOUNT_ATTR_NOEXEC
+	if err := unix.Mount("overlay", "/etc", "overlay", flags, "lowerdir=/etc,upperdir=/perm/etc,workdir=/perm/.w"); err != nil {
+		log.Printf("couldn't mount overlay for /etc: %v\n", err)
+	}
+	return nil
+}
 
 func main() {
 	init := os.Getpid() == 1
@@ -30,6 +45,10 @@ func main() {
 
 		if err := gokrazy.Boot(buildTime); err != nil {
 			log.Fatal(err)
+		}
+		// Re-mount /etc with an overlay.
+		if err := mountfs(); err != nil {
+			log.Printf("couldn't re-mount /etc rw: %v\n", err)
 		}
 	} else {
 		// Possibly running as a gokrazy service, don't use formatting.
@@ -47,6 +66,18 @@ func main() {
 	fmt.Println("✅ Networking")
 
 	if init {
+		// N.B. package gokrazy stores hostname as a global in gokrazy.Boot().
+		// Setting it here won't update that, so the gokrazy status page still shows the old hostname.
+		if c.System.Hostname != "" {
+			log.Println("Setting hostname to ", c.System.Hostname)
+			if err := os.WriteFile("/etc/hostname", []byte(c.System.Hostname), 0644); err != nil {
+				log.Printf("couldn't update /etc/hostname: %v\n", err)
+			}
+			if err := unix.Sethostname([]byte(c.System.Hostname)); err != nil {
+				log.Printf("couldn't set hostname: %v\n", err)
+			}
+		}
+
 		// Start the gokrazy supervisor just to get the web server and listener for IP changes.
 		// TODO: Add things like SSH as a service here.
 		if err := gokrazy.SuperviseServices(nil); err != nil {
